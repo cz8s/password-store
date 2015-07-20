@@ -127,12 +127,12 @@ check_sneaky_paths() {
 # BEGIN platform definable
 #
 
-clip() {
+clip_xclip() {
 	# This base64 business is because bash cannot store binary data in a shell
 	# variable. Specifically, it cannot store nulls nor (non-trivally) store
 	# trailing new lines.
-	local sleep_argv0="password store sleep on display $DISPLAY"
-	pkill -f "^$sleep_argv0" 2>/dev/null && sleep 0.5
+	local sleep_argv0="$1"
+	shift
 	local before="$(xclip -o -selection "$X_SELECTION" 2>/dev/null | base64)"
 	echo -n "$1" | xclip -selection "$X_SELECTION" || die "Error: Could not copy data to the clipboard"
 	(
@@ -151,6 +151,32 @@ clip() {
 
 		echo "$before" | base64 -d | xclip -selection "$X_SELECTION"
 	) 2>/dev/null & disown
+}
+clip_gpaste() {
+	# GPaste is a clipboard manager with built-in password support
+	# it will never write it to disk or print it unless you paste it
+	local sleep_argv0="$1"
+	shift
+	if echo -n "$1" | gpaste add-password "$2" >/dev/null 2>&1; then
+		(
+			( exec -a "$sleep_argv0" sleep "$CLIP_TIME" )
+			gpaste delete-password "$2"
+		) 2>/dev/null & disown
+	else
+		# fallback to xclip
+		clip_xclip "$sleep_argv0" "$@"
+	fi
+}
+clip() {
+	local sleep_argv0="password store sleep on display $DISPLAY"
+	pkill -f "^$sleep_argv0" 2>/dev/null && sleep 0.5
+	local gpaste=0
+	gpaste help | grep -q password && gpaste=1
+	if [[ $gpaste -eq 1 ]]; then
+		clip_gpaste "$sleep_argv0" "$@"
+	else
+		clip_xclip "$sleep_argv0" "$@"
+	fi
 	echo "Copied $2 to clipboard. Will clear in $CLIP_TIME seconds."
 }
 tmpdir() {
