@@ -22,7 +22,7 @@ gpg_winpath() {
 	local could_be_filenames="true"
 	local i
 	for ((i=${#args[@]}-1; i>=0; i--)); do
-		if ( [ $i -gt 0 ] && [ "${args[$i-1]}" = "-o" ] ); then
+		if ( [ $i -gt 0 ] && [ "${args[$i-1]}" = "-o" ] && [ "${args[$i]}" != "-" ] ); then
 			args[$i]="$(cygpath -am "${args[$i]}")"
 		elif [ $could_be_filenames = "true" ]; then
 			if [ -e "${args[$i]}" ]; then
@@ -35,7 +35,7 @@ gpg_winpath() {
 	$GPG_ORIG "${args[@]}"
 }
 
-if $GPG --help | grep -q Gpg4win; then
+if $GPG --help | grep -q 'Home: [A-Z]:[/\\]'; then
 	GPG_ORIG="$GPG"
 	GPG=gpg_winpath
 fi

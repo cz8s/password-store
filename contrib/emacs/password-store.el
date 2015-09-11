@@ -4,7 +4,7 @@
 
 ;; Author: Svend Sorensen <svend@ciffer.net>
 ;; Version: 0.1
-;; Package-Requires: ((dash "1.5.0") (f "0.11.0") (s "1.9.0"))
+;; Package-Requires: ((f "0.11.0") (s "1.9.0"))
 ;; Keywords: pass
 
 ;; This file is not part of GNU Emacs.
@@ -31,16 +31,22 @@
 
 ;;; Code:
 
-(require 'dash)
 (require 'f)
 (require 's)
+
+(defgroup password-store '()
+  "Emacs mode for password-store."
+  :prefix "password-store-"
+  :group 'password-store)
+
+(defcustom password-store-password-length 8
+  "Default password length."
+  :group 'password-store
+  :type 'number)
 
 (defvar password-store-executable
   (executable-find "pass")
   "Pass executable.")
-
-(defconst password-store-password-length 8
-  "Default password length.")
 
 (defun password-store-timeout ()
   "Number of seconds to wait before clearing the password."
@@ -54,14 +60,19 @@
 Nil arguments are ignored.  Returns the output on success, or
 outputs error message on failure."
   (with-temp-buffer
-    (let ((exit-code
-	   (apply 'call-process
-		  (append
-		   (list password-store-executable nil (current-buffer) nil)
-		   (-reject 'null args)))))
+    (let* ((tempfile (make-temp-file ""))
+           (exit-code
+            (apply 'call-process
+                   (append
+                    (list password-store-executable nil (list t tempfile) nil)
+                    (delq nil args)))))
+      (unless (zerop exit-code)
+        (erase-buffer)
+        (insert-file-contents tempfile))
+      (delete-file tempfile)
       (if (zerop exit-code)
-	  (s-chomp (buffer-string))
-	(error (s-chomp (buffer-string)))))))
+          (s-chomp (buffer-string))
+        (error (s-chomp (buffer-string)))))))
 
 (defun password-store--run-init (gpg-ids &optional folder)
   (apply 'password-store--run "init"
@@ -144,8 +155,8 @@ outputs error message on failure."
   (unless subdir (setq subdir ""))
   (let ((dir (f-join (password-store-dir) subdir)))
     (if (f-directory? dir)
-	(mapcar 'password-store--file-to-entry
-		(f-files dir (lambda (file) (equal (f-ext file) "gpg")) t)))))
+        (mapcar 'password-store--file-to-entry
+                (f-files dir (lambda (file) (equal (f-ext file) "gpg")) t)))))
 
 ;;;###autoload
 (defun password-store-edit (entry)
@@ -199,11 +210,11 @@ Separate multiple IDs with spaces."
 (defun password-store-insert (entry password)
   "Insert a new ENTRY containing PASSWORD."
   (interactive (list (read-string "Password entry: ")
-		     (read-passwd "Password: " t)))
+                     (read-passwd "Password: " t)))
   (message (shell-command-to-string (format "echo %s | %s insert -m -f %s"
-					    (shell-quote-argument password)
-					    password-store-executable
-					    (shell-quote-argument entry)))))
+                                            (shell-quote-argument password)
+                                            password-store-executable
+                                            (shell-quote-argument entry)))))
 
 ;;;###autoload
 (defun password-store-generate (entry &optional password-length)
@@ -211,8 +222,8 @@ Separate multiple IDs with spaces."
 
 Default PASSWORD-LENGTH is `password-store-password-length'."
   (interactive (list (read-string "Password entry: ")
-		     (when current-prefix-arg
-		       (abs (prefix-numeric-value current-prefix-arg)))))
+                     (when current-prefix-arg
+                       (abs (prefix-numeric-value current-prefix-arg)))))
   (unless password-length (setq password-length password-store-password-length))
   ;; A message with the output of the command is not printed because
   ;; the output contains the password.
@@ -247,8 +258,8 @@ avoid sending a password to the browser."
   (interactive (list (password-store--completing-read)))
   (let ((url (password-store-get entry)))
     (if (or (string-prefix-p "http://" url)
-	    (string-prefix-p "https://" url))
-	(browse-url url)
+            (string-prefix-p "https://" url))
+        (browse-url url)
       (error "%s" "String does not look like a URL"))))
 
 (provide 'password-store)
